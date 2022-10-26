@@ -25,7 +25,7 @@ impl HyperTransport {
 
         HyperTransport {
             uri: Uri::from_static("127.0.0.1:8332"),
-            timeout: Duration::from_secs(15),
+            timeout: Duration::from_secs(2),
             basic_auth: None,
             client,
         }
