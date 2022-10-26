@@ -36,6 +36,8 @@ pub mod client;
 pub mod error;
 mod util;
 
+pub mod hyper_http;
+
 #[cfg(feature = "simple_http")]
 pub mod simple_http;
 
