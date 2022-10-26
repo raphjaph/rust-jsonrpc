@@ -1,18 +1,17 @@
+use core::str::FromStr;
 use serde;
 use std::time::{Duration, Instant};
-use std::{error, fmt, io::Error, net, thread};
+use std::fmt;
 
 use crate::client::Transport;
 use crate::{Request, Response};
 
 use hyper::client::connect::HttpConnector;
 use hyper::Client as HyperClient;
-use hyper::{Body, Request as HttpRequest, Response as HttpResponse, Uri};
-
-pub const DEFAULT_PORT: u16 = 8332;
+use hyper::{Body, Uri};
 
 #[derive(Clone, Debug)]
-struct HyperTransport {
+pub struct HyperTransport {
     uri: Uri,
     timeout: Duration,
     basic_auth: Option<String>,
@@ -29,15 +28,15 @@ impl HyperTransport {
         }
     }
 
-    fn request<R>(&self, req: impl serde::Serialize) -> Result<R, Error>
+    fn request<R>(&self, req: impl serde::Serialize) -> Result<R, crate::Error>
     where
         R: for<'a> serde::de::Deserialize<'a>,
     {
         let request_deadline = Instant::now() + self.timeout;
         let body = serde_json::to_vec(&req)?;
-        let mut builder = HttpRequest::builder()
+        let mut builder = hyper::Request::builder()
             .method("POST")
-            .uri(self.uri.path())
+            .uri(self.uri.clone())
             .header("Connection", "Close")
             .header("Content-Type", "application/json")
             .header("Content-Length", body.len().to_string());
@@ -46,10 +45,19 @@ impl HyperTransport {
         }
 
         let request = builder.body(Body::from(body)).unwrap();
-        let future = self.client.request(request);
-        let response: HttpResponse<R> = future.into();
 
-        Ok(())
+        let response_body =
+            tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap().block_on(
+                async {
+                    let body = self.client.request(request).await.unwrap().into_body();
+                    hyper::body::to_bytes(body).await.unwrap()
+                },
+            );
+
+        match serde_json::from_slice(&response_body) {
+            Ok(s) => Ok(s),
+            Err(e) => Err(e.into()),
+        }
     }
 }
 
@@ -63,7 +71,13 @@ impl Transport for HyperTransport {
     }
 
     fn fmt_target(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "http://{}:{}{}", self.uri.host().unwrap(), self.uri.port().unwrap(), self.uri.path())
+        write!(
+            f,
+            "http://{}:{}{}",
+            self.uri.host().unwrap(),
+            self.uri.port().unwrap(),
+            self.uri.path()
+        )
     }
 }
 
@@ -84,8 +98,9 @@ impl Builder {
         self
     }
 
-    pub fn url(mut self, url: &str) -> Result<Self, Error> {
-        self.transport.uri = Uri::from_static(url);
+    pub fn url(mut self, url: &str) -> Result<Self, crate::Error> {
+        self.transport.uri =
+            Uri::from_str(url).map_err(|err| crate::Error::Transport(Box::new(err)))?;
         Ok(self)
     }
 
@@ -115,7 +130,7 @@ impl crate::Client {
         url: &str,
         user: Option<String>,
         pass: Option<String>,
-    ) -> Result<crate::Client, Error> {
+    ) -> Result<crate::Client, crate::Error> {
         let mut builder = Builder::new().url(url)?;
         if let Some(user) = user {
             builder = builder.auth(user, pass);
@@ -128,16 +143,16 @@ impl crate::Client {
 mod tests {
     use super::*;
 
-    //    #[test]
-    //    fn construct() {
-    //        let tp = Builder::new()
-    //            .timeout(Duration::from_millis(100))
-    //            .url("localhost:22")
-    //            .unwrap()
-    //            .auth("user", None)
-    //            .build();
-    //        let _ = Client::with_transport(tp);
-    //
-    //        let _ = Client::simple_http("localhost:22", None, None).unwrap();
-    //    }
+    #[test]
+    fn construct() {
+        let tp = Builder::new()
+            .timeout(Duration::from_millis(100))
+            .url("localhost:22")
+            .unwrap()
+            .auth("user", None)
+            .build();
+        let _ = crate::Client::with_transport(tp);
+
+        let _ = crate::Client::simple_http("localhost:22", None, None).unwrap();
+    }
 }
