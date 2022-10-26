@@ -21,6 +21,7 @@ impl HyperTransport {
     pub fn new() -> Self {
         let mut connector = HttpConnector::new();
         connector.set_reuse_address(true);
+        connector.set_connect_timeout(Some(Duration::from_secs(1)));
         let client = hyper::Client::builder().build(connector);
 
         HyperTransport {
