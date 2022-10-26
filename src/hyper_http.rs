@@ -7,7 +7,6 @@ use crate::client::Transport;
 use crate::{Request, Response};
 
 use hyper::client::connect::HttpConnector;
-use hyper::Client as HyperClient;
 use hyper::{Body, Uri};
 
 #[derive(Clone, Debug)]
@@ -15,16 +14,20 @@ pub struct HyperTransport {
     uri: Uri,
     timeout: Duration,
     basic_auth: Option<String>,
-    client: HyperClient<HttpConnector>,
+    client: hyper::Client<HttpConnector>,
 }
 
 impl HyperTransport {
     pub fn new() -> Self {
+        let mut connector = HttpConnector::new();
+        connector.set_reuse_address(true);
+        let client = hyper::Client::builder().build(connector);
+
         HyperTransport {
             uri: Uri::from_static("127.0.0.1:8332"),
             timeout: Duration::from_secs(15),
             basic_auth: None,
-            client: HyperClient::new(),
+            client,
         }
     }
 
