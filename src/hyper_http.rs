@@ -38,7 +38,6 @@ impl HyperTransport {
         let mut builder = hyper::Request::builder()
             .method("POST")
             .uri(self.uri.clone())
-            .header("Connection", "Close")
             .header("Content-Type", "application/json")
             .header("Content-Length", body.len().to_string());
         if let Some(ref auth) = self.basic_auth {
