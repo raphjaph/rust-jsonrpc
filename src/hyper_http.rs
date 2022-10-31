@@ -19,10 +19,7 @@ pub struct HyperTransport {
 
 impl HyperTransport {
     pub fn new() -> Self {
-        let mut connector = HttpConnector::new();
-        connector.set_reuse_address(true);
-        connector.set_connect_timeout(Some(Duration::from_secs(1)));
-        let client = hyper::Client::builder().build(connector);
+        let client = hyper::Client::new();
 
         HyperTransport {
             uri: Uri::from_static("127.0.0.1:8332"),
